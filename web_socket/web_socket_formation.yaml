@@ -1,0 +1,277 @@
+Transform: AWS::Serverless-2016-10-31
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Semantic Search WebSocket API with Lambda functions and DynamoDB for real-time search connections
+
+Resources:
+
+  # DynamoDB Table for storing semantic search WebSocket connections
+  SemanticSearchConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SemanticSearchConnections
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # IAM Role for Lambda with access to DynamoDB and API Gateway Management API
+  SemanticSearchLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SemanticSearchLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: SemanticSearchDynamoAndApiGateway
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                Resource: !GetAtt SemanticSearchConnectionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - execute-api:ManageConnections
+                Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/@connections/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  # Lambda Functions for $connect, $disconnect, sendmessage
+
+  SemanticSearchConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Role: !GetAtt SemanticSearchLambdaExecutionRole.Arn
+      CodeUri: connect_handler/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SemanticSearchConnectionsTable
+      Timeout: 10
+
+  SemanticSearchDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Role: !GetAtt SemanticSearchLambdaExecutionRole.Arn
+      CodeUri: disconnect_handler/
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SemanticSearchConnectionsTable
+      Timeout: 10
+
+  SemanticSearchSendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Role: !GetAtt SemanticSearchLambdaExecutionRole.Arn
+      CodeUri: send_message_handler/
+      Environment:
+        Variables:
+          APIGW_DOMAIN: !Sub "${SemanticSearchApi}.execute-api.${AWS::Region}.amazonaws.com"
+          APIGW_STAGE: prod
+      Timeout: 10
+
+  # API Gateway WebSocket API
+  SemanticSearchApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SemanticSearchApi
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  # API Gateway Routes
+  SemanticSearchConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${SemanticSearchConnectIntegration}
+
+  SemanticSearchDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${SemanticSearchDisconnectIntegration}
+
+  SemanticSearchSendMessageRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      RouteKey: sendmessage
+      AuthorizationType: NONE
+      Target: !Sub integrations/${SemanticSearchSendMessageIntegration}
+
+  # API Gateway Integrations
+  SemanticSearchConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+        - {Region: !Ref "AWS::Region", LambdaArn: !GetAtt SemanticSearchConnectFunction.Arn}
+
+  SemanticSearchDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+        - {Region: !Ref "AWS::Region", LambdaArn: !GetAtt SemanticSearchDisconnectFunction.Arn}
+
+  SemanticSearchSendMessageIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+        - {Region: !Ref "AWS::Region", LambdaArn: !GetAtt SemanticSearchSendMessageFunction.Arn}
+
+  # API Deployment and Stage
+  SemanticSearchDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - SemanticSearchConnectRoute
+      - SemanticSearchDisconnectRoute
+      - SemanticSearchSendMessageRoute
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+
+  SemanticSearchStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref SemanticSearchApi
+      DeploymentId: !Ref SemanticSearchDeployment
+      StageName: prod
+      AutoDeploy: true
+
+  # Permission for API Gateway to invoke Lambda
+  LambdaInvokePermissionConnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SemanticSearchConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SemanticSearchApi}/*/$connect
+
+  LambdaInvokePermissionDisconnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SemanticSearchDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SemanticSearchApi}/*/$disconnect
+
+  LambdaInvokePermissionSendMessage:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SemanticSearchSendMessageFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SemanticSearchApi}/*/sendmessage
+
+  # S3 Bucket for React Static Website
+  SemanticSearchReactWebsite:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub semantic-search-react-${AWS::AccountId}-${AWS::Region}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - "*"
+            MaxAge: 3600
+
+  # S3 Bucket Policy for Public Read Access
+  SemanticSearchReactWebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SemanticSearchReactWebsite
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${SemanticSearchReactWebsite}/*"
+
+  # CloudWatch Log Group for Lambda
+  SemanticSearchCloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /lambda/semantic-search-lambdas
+      RetentionInDays: 7
+
+Outputs:
+  SemanticSearchApiId:
+    Description: Semantic Search API ID
+    Value: !Ref SemanticSearchApi
+
+  SemanticSearchApiEndpoint:
+    Description: Semantic Search API Endpoint URL
+    Value: !Sub "wss://${SemanticSearchApi}.execute-api.${AWS::Region}.amazonaws.com/${SemanticSearchStage}"
+    Export:
+      Name: SemanticSearchApiEndpoint
+
+  SemanticSearchApiArn:
+    Description: Semantic Search API ARN
+    Value: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SemanticSearchApi}"
+
+  SemanticSearchConnectionsTableExport:
+    Description: Semantic Search DynamoDB Table Name
+    Value: !Ref SemanticSearchConnectionsTable
+    Export:
+      Name: SemanticSearchConnectionsTable
+
+  SemanticSearchReactWebsiteUrl:
+    Description: React Website URL
+    Value: !Sub "http://${SemanticSearchReactWebsite}.s3-website-${AWS::Region}.amazonaws.com"
+    Export:
+      Name: SemanticSearchReactWebsiteUrl
+
+  SemanticSearchReactWebsiteBucket:
+    Description: S3 Bucket Name for React Website
+    Value: !Ref SemanticSearchReactWebsite
+    Export:
+      Name: SemanticSearchReactWebsiteBucket
+
