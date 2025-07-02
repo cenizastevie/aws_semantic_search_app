@@ -3,10 +3,16 @@ import json
 import boto3
 from flask import Flask, request, jsonify
 from zappa.asynchronous import task
-import requests
-from botocore.auth import SigV4Auth
-from botocore.awsrequest import AWSRequest
 import traceback
+
+# Import our custom modules
+from bedrock_embeddings import get_bedrock_embedding, test_bedrock_connection
+from opensearch_client import (
+    search_opensearch_by_embedding, 
+    test_opensearch_connection,
+    get_index_info,
+    create_opensearch_index
+)
 
 # Load environment variables
 if os.environ.get('LAMBDA_TASK_ROOT') is None:
@@ -79,69 +85,6 @@ def search_endpoint():
         
     except Exception as e:
         return jsonify(error=f'Search failed: {str(e)}'), 500
-
-def get_bedrock_embedding(text, model_id=MODEL_ID):
-    """Get embedding from Bedrock"""
-    try:
-        bedrock = boto3.client('bedrock-runtime', region_name=AWS_REGION)
-        body = json.dumps({"inputText": text})
-        response = bedrock.invoke_model(
-            body=body,
-            modelId=model_id,
-            accept='application/json',
-            contentType='application/json'
-        )
-        response_body = json.loads(response.get('body').read())
-        embedding = response_body.get('embedding')
-        return embedding
-    except Exception as e:
-        print(f"Error getting Bedrock embedding: {str(e)}")
-        raise e
-
-def search_opensearch_by_embedding(embedding, endpoint=OPENSEARCH_ENDPOINT, region=AWS_REGION, index_name=INDEX_NAME, k=10):
-    """Search OpenSearch using vector embedding"""
-    try:
-        if not endpoint:
-            raise Exception("OpenSearch endpoint not configured")
-            
-        session = boto3.Session()
-        credentials = session.get_credentials()
-        if not credentials:
-            raise Exception('Unable to get AWS credentials')
-        
-        url = f"https://{endpoint}/{index_name}/_search"
-        
-        # k-NN query for semantic search
-        query = {
-            "size": k,
-            "query": {
-                "knn": {
-                    "embedding": {
-                        "vector": embedding,
-                        "k": k
-                    }
-                }
-            },
-            "_source": ["title", "summary", "content", "sentiment_label", "sentiment_score", "category"]
-        }
-        
-        data = json.dumps(query)
-        request = AWSRequest(method='POST', url=url, data=data.encode('utf-8'))
-        request.headers['Content-Type'] = 'application/json'
-        request.headers['Host'] = endpoint
-        SigV4Auth(credentials, 'es', region).add_auth(request)
-        headers = dict(request.headers)
-        
-        response = requests.post(url, data=data, headers=headers)
-        
-        if not response.ok:
-            raise Exception(f"OpenSearch query failed: {response.status_code} {response.text}")
-        
-        return response.json()
-        
-    except Exception as e:
-        print(f"Error searching OpenSearch: {str(e)}")
-        raise e
 
 def perform_semantic_search(query_text):
     """Perform complete semantic search workflow"""
