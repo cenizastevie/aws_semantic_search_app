@@ -3,8 +3,8 @@ import { FiSend, FiUser } from 'react-icons/fi'
 import { RiRobot2Line } from 'react-icons/ri'
 import './App.css'
 
-// WebSocket endpoint - Update this with your actual WebSocket URL
-const WEBSOCKET_URL = 'wss://your-websocket-api-id.execute-api.your-region.amazonaws.com/prod/'
+// WebSocket endpoint - Loaded from environment variable
+const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL
 
 function App() {
   // WebSocket state
