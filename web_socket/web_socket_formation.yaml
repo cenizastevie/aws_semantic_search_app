@@ -233,7 +233,7 @@ Resources:
             Effect: Allow
             Principal: "*"
             Action: s3:GetObject
-            Resource: !Sub "${SemanticSearchReactWebsite}/*"
+            Resource: !Sub "${SemanticSearchReactWebsite.Arn}/*"
 
   # CloudWatch Log Group for Lambda
   SemanticSearchCloudWatchLogGroup:

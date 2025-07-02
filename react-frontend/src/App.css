@@ -1,0 +1,45 @@
+.message-content {
+  /* Add smooth animations */
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced hover effects */
+.send-button:hover:not(:disabled) {
+  transform: translateY(-50%) scale(1.05);
+  transition: all 0.2s ease;
+}
+
+/* Better focus states */
+.chat-input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  outline: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .message-content {
+    max-width: 85%;
+  }
+  
+  .chat-input-container {
+    padding: 0.75rem;
+  }
+  
+  .connection-status {
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 11px;
+  }
+}

@@ -31,3 +31,35 @@ Serverless AWS app for real-time semantic search using OpenSearch, WebSockets, a
 - The WebSocket API endpoint will be available in the CloudFormation outputs
 - The React website S3 bucket will be created and ready for your frontend deployment
 - Lambda functions will be deployed and ready to handle WebSocket connections
+
+## React Frontend Setup
+
+### 1. Install Dependencies
+```cmd
+cd react-frontend
+npm install
+```
+
+### 2. Update WebSocket Configuration
+Edit `src/App.jsx` and update the `WEBSOCKET_URL` constant with your deployed WebSocket API endpoint:
+```javascript
+const WEBSOCKET_URL = 'wss://your-api-id.execute-api.your-region.amazonaws.com/prod/'
+```
+
+### 3. Development
+```cmd
+npm run dev
+```
+
+### 4. Build and Deploy to S3
+```cmd
+npm run build
+aws s3 sync dist/ s3://your-bucket-name --delete
+```
+
+## Features
+- 🔍 **Semantic Search**: Real-time search using WebSocket connections
+- 💬 **Chat Interface**: Modern chat UI similar to ChatGPT/DeepSeek
+- 🔄 **Auto-reconnect**: Automatic WebSocket reconnection on disconnect
+- 📱 **Responsive**: Mobile-friendly design
+- ⚡ **Real-time**: Instant message delivery and typing indicators
