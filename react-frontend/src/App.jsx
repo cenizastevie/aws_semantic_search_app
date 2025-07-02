@@ -52,8 +52,6 @@ function App() {
       ws.onclose = () => {
         console.log('WebSocket disconnected')
         setWsStatus('disconnected')
-        // Attempt to reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000)
       }
 
       ws.onerror = (error) => {
@@ -67,15 +65,20 @@ function App() {
         try {
           const data = JSON.parse(event.data)
           
+          // Skip "Forbidden" messages
+          if (data.message === "Forbidden") {
+            return
+          }
+          
           // Handle connection ID
           if (data.connectionId) {
             setConnectionId(data.connectionId)
           }
           
           // Handle search results or responses
-          if (data.message || data.response || data.results) {
+          if (data.message || data.response || data.results || data.processed_message) {
             setIsTyping(false)
-            const content = data.message || data.response || 
+            const content = data.message || data.response || data.processed_message ||
                            (data.results ? `Found ${data.results.length} results:\n\n${data.results.map((r, i) => `${i+1}. ${r.title || r.text || r}`).join('\n')}` : 'No results found')
             
             const newMessage = {
