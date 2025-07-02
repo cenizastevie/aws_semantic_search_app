@@ -5,6 +5,8 @@ import './App.css'
 
 // WebSocket endpoint - Loaded from environment variable
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL
+// API endpoint for direct HTTP requests (Zappa backend)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 function App() {
   // WebSocket state
@@ -116,8 +118,8 @@ function App() {
   }, [])
 
   // Send message function
-  const sendMessage = () => {
-    if (!inputMessage.trim() || wsStatus !== 'connected') return
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return
 
     // Add user message to chat
     const userMessage = {
@@ -128,21 +130,93 @@ function App() {
     }
     
     setMessages(prev => [...prev, userMessage])
+    const currentInput = inputMessage.trim()
+    setInputMessage('')
 
-    // Send message via WebSocket
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    // Try WebSocket first, fallback to HTTP API
+    if (wsStatus === 'connected' && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Send via WebSocket
       const payload = {
         action: 'sendmessage',
-        message: inputMessage.trim(),
-        type: 'semantic_search' // Indicate this is a semantic search request
+        message: currentInput,
+        type: 'semantic_search'
       }
       
       wsRef.current.send(JSON.stringify(payload))
       setIsTyping(true)
+    } else if (API_BASE_URL) {
+      // Fallback to HTTP API (Zappa backend)
+      try {
+        setIsTyping(true)
+        
+        const response = await fetch(`${API_BASE_URL}/search`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: currentInput,
+            connection_id: connectionId
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        setIsTyping(false)
+        
+        // Format response similar to WebSocket
+        let responseMessage = `Found ${data.total_results} results for "${currentInput}"\n\n`
+        
+        if (data.results && data.results.length > 0) {
+          data.results.slice(0, 5).forEach((result, index) => {
+            responseMessage += `${index + 1}. **${result.title}**\n`
+            responseMessage += `   ${result.summary}\n`
+            responseMessage += `   Score: ${result.score.toFixed(3)}`
+            if (result.sentiment && result.sentiment.label !== 'Unknown') {
+              responseMessage += ` | Sentiment: ${result.sentiment.label} (${result.sentiment.score.toFixed(3)})`
+            }
+            responseMessage += '\n\n'
+          })
+        } else {
+          responseMessage = `No results found for "${currentInput}". Try rephrasing your query.`
+        }
+        
+        const assistantMessage = {
+          id: Date.now(),
+          type: 'assistant',
+          content: responseMessage,
+          timestamp: new Date()
+        }
+        
+        setMessages(prev => [...prev, assistantMessage])
+        
+      } catch (error) {
+        setIsTyping(false)
+        console.error('HTTP API error:', error)
+        
+        const errorMessage = {
+          id: Date.now(),
+          type: 'assistant',
+          content: `Sorry, I encountered an error: ${error.message}. Please check your connection and try again.`,
+          timestamp: new Date()
+        }
+        
+        setMessages(prev => [...prev, errorMessage])
+      }
+    } else {
+      // No connection available
+      const errorMessage = {
+        id: Date.now(),
+        type: 'assistant',
+        content: 'Sorry, I\'m currently unable to process your request. Please check your connection and try again.',
+        timestamp: new Date()
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
     }
-
-    // Clear input
-    setInputMessage('')
   }
 
   // Handle input key press
@@ -220,7 +294,7 @@ function App() {
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Ask me anything about your documents..."
-            disabled={wsStatus !== 'connected'}
+            disabled={false}
             rows={1}
             style={{
               height: Math.min(Math.max(44, inputMessage.split('\n').length * 20 + 24), 120)
@@ -229,7 +303,7 @@ function App() {
           <button
             className="send-button"
             onClick={sendMessage}
-            disabled={!inputMessage.trim() || wsStatus !== 'connected'}
+            disabled={!inputMessage.trim()}
           >
             <FiSend size={14} />
           </button>

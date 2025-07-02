@@ -1,0 +1,38 @@
+{
+    "dev": {
+        "app_function": "app.app",
+        "aws_region": "us-east-1",
+        "profile_name": "default",
+        "project_name": "semantic-search-backend",
+        "runtime": "python3.11",
+        "s3_bucket": "semantic-search-zappa-deployments",
+        "environment_variables": {
+            "OPENSEARCH_ENDPOINT": "",
+            "WEBSOCKET_API_ENDPOINT": "",
+            "MODEL_ID": "amazon.titan-embed-text-v1",
+            "INDEX_NAME": "semantic-search-index"
+        },
+        "timeout_seconds": 300,
+        "memory_size": 512,
+        "keep_warm": false,
+        "cors": true
+    },
+    "prod": {
+        "app_function": "app.app",
+        "aws_region": "us-east-1",
+        "profile_name": "default",
+        "project_name": "semantic-search-backend",
+        "runtime": "python3.11",
+        "s3_bucket": "semantic-search-zappa-deployments",
+        "environment_variables": {
+            "OPENSEARCH_ENDPOINT": "",
+            "WEBSOCKET_API_ENDPOINT": "",
+            "MODEL_ID": "amazon.titan-embed-text-v1",
+            "INDEX_NAME": "semantic-search-index"
+        },
+        "timeout_seconds": 300,
+        "memory_size": 512,
+        "keep_warm": false,
+        "cors": true
+    }
+}
