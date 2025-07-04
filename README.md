@@ -1,22 +1,6 @@
 # aws_semantic_search_app
 Serverless AWS app for real-time semantic search using OpenSearch, Zappa Flask backend, WebSockets, Bedrock embeddings, and React.
 
-## Architecture Overview
-- **Frontend**: React chat interface with WebSocket + HTTP API fallback
-- **Backend**: Zappa Flask application with async task processing
-- **Search**: Amazon OpenSearch with k-NN vector search  
-- **Embeddings**: Amazon Bedrock Titan Text Embeddings
-- **WebSocket**: Optional real-time communication
-- **Storage**: S3 for frontend hosting
-
-## Deployment Instructions
-
-### Prerequisites
-- AWS CLI configured with appropriate credentials
-- Python 3.11+ and pip
-- Node.js and npm for React frontend
-- Zappa for serverless deployment
-
 ### 1. Deploy Zappa Backend
 
 **Navigate to the backend directory:**
@@ -102,45 +86,6 @@ aws s3 sync dist/ s3://your-frontend-bucket --delete
 - `POST /search` - Direct semantic search
 - `POST /process-search` - Async search with WebSocket notifications
 
-### Example API Usage
-
-**Direct Search:**
-```bash
-curl -X POST https://your-zappa-api.execute-api.us-east-1.amazonaws.com/dev/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "machine learning benefits"}'
-```
-
-**Async Search with WebSocket:**
-```bash
-curl -X POST https://your-zappa-api.execute-api.us-east-1.amazonaws.com/dev/process-search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "cloud computing", "connection_id": "abc123"}'
-```
-
-## Features
-- 🔍 **Semantic Search**: Real-time search using vector embeddings
-- 💬 **Chat Interface**: Modern chat UI similar to ChatGPT/DeepSeek
-- 🔄 **Dual Connectivity**: WebSocket + HTTP API fallback
-- 📱 **Responsive**: Mobile-friendly design
-- ⚡ **Async Processing**: Zappa task-based processing
-- 🎯 **Sentiment Analysis**: Results categorized by positive/negative sentiment
-- 🤖 **AI-Powered**: Uses Amazon Bedrock for text embeddings
-- 🚀 **Serverless**: Fully serverless architecture with Zappa
-
-## How It Works
-
-### WebSocket Flow:
-1. User connects to WebSocket API
-2. Message sent via WebSocket to Lambda
-3. Lambda processes search and responds via WebSocket
-
-### HTTP API Flow (Fallback):
-1. User types query in React interface
-2. HTTP request sent to Zappa Flask backend
-3. Backend processes search using Bedrock + OpenSearch
-4. Results returned directly via HTTP response
-
 ## Environment Variables
 
 ### Zappa Backend
@@ -185,20 +130,3 @@ npm run build
 # Preview production build
 npm run preview
 ```
-
-## Troubleshooting
-
-### Zappa Deployment Issues
-- Ensure your S3 bucket for deployments exists and is accessible
-- Check IAM permissions for Zappa deployment
-- Verify Python version compatibility (3.11+)
-
-### OpenSearch Issues
-- Ensure k-NN is enabled in your index settings
-- Check that documents have embeddings in the `embedding` field
-- Verify IAM permissions for accessing OpenSearch
-
-### API Connection Issues
-- Check CORS settings in Zappa configuration
-- Verify API endpoints in environment variables
-- Check CloudWatch logs for detailed error messages
