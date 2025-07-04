@@ -24,6 +24,12 @@ Serverless AWS app for real-time semantic search using OpenSearch, Zappa Flask b
 cd zappa_backend
 ```
 
+**Create and activate a Python virtual environment (required for Zappa):**
+```cmd
+python -m venv venv
+venv\Scripts\activate
+```
+
 **Install Python dependencies:**
 ```cmd
 pip install -r requirements.txt

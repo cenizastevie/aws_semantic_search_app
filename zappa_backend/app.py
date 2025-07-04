@@ -6,13 +6,11 @@ from zappa.asynchronous import task
 import traceback
 
 # Import our custom modules
-from bedrock_embeddings import get_bedrock_embedding, test_bedrock_connection
+from bedrock_embeddings import get_bedrock_embedding
 from opensearch_client import (
-    search_opensearch_by_embedding, 
-    test_opensearch_connection,
-    get_index_info,
-    create_opensearch_index
+    search_opensearch_by_embedding
 )
+from llm_summarize_from_opensearch import llm_summarize
 
 # Load environment variables
 if os.environ.get('LAMBDA_TASK_ROOT') is None:
@@ -264,6 +262,25 @@ def health_check():
         'service': 'semantic-search-backend',
         'configuration': config_status
     }), 200
+
+@app.route('/llm-summarize', methods=['POST', 'OPTIONS'])
+def llm_summarize_endpoint():
+    """Endpoint to synthesize OpenSearch results using Bedrock LLM (Jinja2 template)"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        body = request.json
+        if not body or 'query' not in body:
+            return jsonify(error='Missing query in request body.'), 400
+        query_text = body['query']
+        k = int(body.get('k', 5))
+        llm_output = llm_summarize(query_text, k=k)
+        return jsonify({
+            'query': query_text,
+            'llm_synthesis': llm_output
+        }), 200
+    except Exception as e:
+        return jsonify(error=f'LLM synthesis failed: {str(e)}'), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
